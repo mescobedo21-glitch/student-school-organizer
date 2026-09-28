@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My School Organizer</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#18202a;--muted:#68707c;--line:#e4e7eb;--accent:#2563eb;--danger:#b42318}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select,textarea{font:inherit}.app{max-width:1100px;margin:auto;min-height:100vh}.top{display:flex;align-items:center;justify-content:space-between;padding:20px 18px 10px}.top h1{font-size:1.25rem;margin:0}.today{color:var(--muted);font-size:.9rem}
+nav{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:10px 18px 16px;position:sticky;top:0;background:rgba(246,247,249,.96);z-index:4}
+nav button,.btn{border:1px solid var(--line);background:white;border-radius:12px;padding:11px;cursor:pointer}.active,.primary{background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important}
+main{padding:0 18px 90px}.view{display:none}.view.activeView{display:block}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 1px 2px #00000008}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.space{justify-content:space-between}h2,h3{margin:0 0 12px}.muted{color:var(--muted)}.small{font-size:.86rem}
+.calendarHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.dow{text-align:center;color:var(--muted);font-size:.78rem;padding:5px}.day{min-height:90px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:7px;cursor:pointer;overflow:hidden}.day.out{opacity:.38}.day.todayDay{outline:2px solid var(--accent)}.num{font-weight:700;font-size:.85rem}.event{font-size:.72rem;padding:3px 5px;margin-top:4px;border-radius:6px;background:#eef2ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.listItem{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding:12px 0}.listItem:first-of-type{border-top:0}.pill{font-size:.75rem;background:#eef2f6;padding:4px 8px;border-radius:999px}.folderGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.folder{cursor:pointer}.folder h3{margin-bottom:5px}.mic{width:88px;height:88px;border-radius:50%;font-size:2rem;border:0;background:var(--accent);color:#fff;cursor:pointer}.mic.listening{animation:pulse 1s infinite}@keyframes pulse{50%{transform:scale(1.07);opacity:.75}}
+label{display:block;font-size:.85rem;font-weight:650;margin:10px 0 5px}input,select,textarea{width:100%;padding:11px;border:1px solid #ccd1d8;border-radius:10px;background:#fff}textarea{min-height:90px;resize:vertical}.modal{display:none;position:fixed;inset:0;background:#0007;z-index:20;padding:20px;overflow:auto}.modal.open{display:flex;align-items:flex-start;justify-content:center}.modalBox{background:#fff;width:min(560px,100%);border-radius:18px;padding:20px;margin-top:5vh}.x{float:right;border:0;background:none;font-size:1.4rem;cursor:pointer}.empty{text-align:center;padding:25px;color:var(--muted)}
+@media(max-width:650px){.day{min-height:66px;padding:4px}.event{font-size:.62rem}.dow{font-size:.65rem}nav button{font-size:.78rem;padding:9px 3px}.top{padding-top:14px}}
+</style>
+</head>
+<body><div class="app">
+<div class="top"><div><h1>My School Organizer</h1><div class="today" id="todayText"></div></div><button class="btn" onclick="openItem()">+ Add</button></div>
+<nav><button data-view="calendar" class="active">📅 Calendar</button><button data-view="classes">📚 Classes</button><button data-view="listen">🎤 Listen</button><button data-view="study">🧠 Study</button></nav>
+<main>
+<section id="calendar" class="view activeView">
+ <div class="card"><div class="calendarHead"><button class="btn" id="prev">‹</button><h2 id="monthTitle"></h2><button class="btn" id="next">›</button></div><div class="calendar" id="cal"></div></div>
+ <div class="card"><h3>Coming Up</h3><div id="upcoming"></div></div>
+</section>
+<section id="classes" class="view">
+ <div class="card"><div class="row space"><div><h2>My Classes</h2><div class="muted small">Set up your schedule once. Change or archive classes anytime.</div></div><button class="btn primary" onclick="openClass()">+ Class</button></div></div>
+ <div class="folderGrid" id="classGrid"></div>
+</section>
+<section id="listen" class="view">
+ <div class="card" style="text-align:center"><h2>Tell Me</h2><p class="muted">Say an assignment or test. You will confirm it before it is saved.</p><button class="mic" id="mic">🎤</button><p id="micStatus">Tap to speak</p><div id="heard"></div></div>
+ <div class="card"><h3>Quick Note</h3><p class="muted small">Save a note to a class. Full class listening/transcription is planned for the next version.</p><select id="noteClass"></select><textarea id="noteText" placeholder="Type or paste a class note..."></textarea><button class="btn primary" style="margin-top:10px" onclick="saveNote()">Save Note</button></div>
+</section>
+<section id="study" class="view">
+ <div class="card"><h2>Get Me Ready</h2><p class="muted">Choose a class to see its tests, assignments and saved notes together.</p><select id="studyClass" onchange="renderStudy()"></select></div><div id="studyContent"></div>
+</section>
+</main></div>
+
+<div class="modal" id="itemModal"><div class="modalBox"><button class="x" onclick="closeModal('itemModal')">×</button><h2>Add to Calendar</h2>
+<label>Type</label><select id="itemType"><option>Assignment</option><option>Test</option><option>Quiz</option><option>Project</option></select>
+<label>Class</label><select id="itemClass"></select><label>Title</label><input id="itemTitle" placeholder="What do you need to do?">
+<label>Due date</label><input id="itemDate" type="date"><label>Details (optional)</label><textarea id="itemDetails"></textarea>
+<div class="row" style="margin-top:14px"><button class="btn primary" onclick="saveItem()">Save</button><button class="btn" onclick="closeModal('itemModal')">Cancel</button></div></div></div>
+
+<div class="modal" id="classModal"><div class="modalBox"><button class="x" onclick="closeModal('classModal')">×</button><h2>Add a Class</h2>
+<label>Class name</label><input id="className" placeholder="Biology"><label>Teacher / period (optional)</label><input id="classInfo" placeholder="Period 2">
+<div class="row" style="margin-top:14px"><button class="btn primary" onclick="saveClass()">Add Class</button><button class="btn" onclick="closeModal('classModal')">Cancel</button></div></div></div>
+
+<script>
+const KEY='schoolOrganizerV1';
+let state=JSON.parse(localStorage.getItem(KEY)||'null')||{classes:[],items:[],notes:[]};
+let cursor=new Date(); cursor.setDate(1);
+const $=id=>document.getElementById(id), save=()=>localStorage.setItem(KEY,JSON.stringify(state));
+function esc(s=''){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function fmt(d){return new Date(d+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}
+$('todayText').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.view').forEach(v=>v.classList.remove('activeView'));$(b.dataset.view).classList.add('activeView'); if(b.dataset.view==='study')renderStudy()});
+$('prev').onclick=()=>{cursor.setMonth(cursor.getMonth()-1);renderCalendar()}; $('next').onclick=()=>{cursor.setMonth(cursor.getMonth()+1);renderCalendar()};
+function options(){return state.classes.filter(c=>!c.archived).map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('')}
+function refreshSelects(){['itemClass','noteClass','studyClass'].forEach(id=>{let old=$(id).value;$(id).innerHTML=options()||'<option value="">Add a class first</option>';if([...$(id).options].some(o=>o.value===old))$(id).value=old})}
+function openItem(date=''){refreshSelects();$('itemDate').value=date||new Date().toISOString().slice(0,10);$('itemTitle').value='';$('itemDetails').value='';$('itemModal').classList.add('open')}
+function openClass(){$('className').value='';$('classInfo').value='';$('classModal').classList.add('open')}
+function closeModal(id){$(id).classList.remove('open')}
+function saveClass(){let name=$('className').value.trim();if(!name)return alert('Enter a class name.');state.classes.push({id:crypto.randomUUID(),name,info:$('classInfo').value.trim(),archived:false});save();closeModal('classModal');renderAll()}
+function saveItem(){if(!state.classes.length)return alert('Add a class first.');let title=$('itemTitle').value.trim(),date=$('itemDate').value;if(!title||!date)return alert('Add a title and due date.');state.items.push({id:crypto.randomUUID(),type:$('itemType').value,classId:$('itemClass').value,title,date,details:$('itemDetails').value.trim(),done:false});save();closeModal('itemModal');renderAll()}
+function renderCalendar(){const y=cursor.getFullYear(),m=cursor.getMonth();$('monthTitle').textContent=cursor.toLocaleDateString(undefined,{month:'long',year:'numeric'});let html=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x=>'<div class="dow">'+x+'</div>').join('');let first=new Date(y,m,1),start=new Date(y,m,1-first.getDay());let today=new Date().toISOString().slice(0,10);for(let i=0;i<42;i++){let d=new Date(start);d.setDate(start.getDate()+i);let iso=d.toISOString().slice(0,10),ev=state.items.filter(x=>x.date===iso);html+='<div class="day '+(d.getMonth()!=m?'out ':'')+(iso===today?'todayDay':'')+'" onclick="openItem(\''+iso+'\')"><div class="num">'+d.getDate()+'</div>'+ev.slice(0,3).map(x=>'<div class="event">'+esc(x.title)+'</div>').join('')+'</div>'}$('cal').innerHTML=html;renderUpcoming()}
+function renderUpcoming(){let now=new Date().toISOString().slice(0,10),arr=state.items.filter(x=>x.date>=now&&!x.done).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,8);$('upcoming').innerHTML=arr.length?arr.map(x=>{let c=state.classes.find(c=>c.id===x.classId);return '<div class="listItem"><div><b>'+esc(x.title)+'</b><div class="small muted">'+esc(c?.name||'Class')+' · '+esc(x.type)+'</div></div><div><span class="pill">'+fmt(x.date)+'</span></div></div>'}).join(''):'<div class="empty">Nothing coming up yet.</div>'}
+function renderClasses(){$('classGrid').innerHTML=state.classes.filter(c=>!c.archived).map(c=>{let count=state.items.filter(x=>x.classId===c.id&&!x.done).length;return '<div class="card folder"><h3>📁 '+esc(c.name)+'</h3><div class="muted small">'+esc(c.info||'')+'</div><p>'+count+' upcoming item'+(count===1?'':'s')+'</p><button class="btn small" onclick="archiveClass(\''+c.id+'\')">Archive</button></div>'}).join('')||'<div class="card empty">Add your classes to build your organizer.</div>'}
+function archiveClass(id){if(confirm('Archive this class? Its assignments and notes will be kept.')){state.classes.find(c=>c.id===id).archived=true;save();renderAll()}}
+function saveNote(){let text=$('noteText').value.trim(),classId=$('noteClass').value;if(!text||!classId)return alert('Choose a class and add a note.');state.notes.push({id:crypto.randomUUID(),classId,text,date:new Date().toISOString()});$('noteText').value='';save();alert('Note saved.');renderStudy()}
+function renderStudy(){refreshSelects();let id=$('studyClass').value;if(!id){$('studyContent').innerHTML='<div class="card empty">Add a class first.</div>';return}let items=state.items.filter(x=>x.classId===id).sort((a,b)=>a.date.localeCompare(b.date)),notes=state.notes.filter(n=>n.classId===id).slice(-5).reverse();let tests=items.filter(x=>['Test','Quiz'].includes(x.type)&&x.date>=new Date().toISOString().slice(0,10));$('studyContent').innerHTML='<div class="card"><h3>Next Test / Quiz</h3>'+(tests[0]?'<b>'+esc(tests[0].title)+'</b><div class="muted">'+fmt(tests[0].date)+'</div>':'<div class="muted">No upcoming test entered.</div>')+'</div><div class="card"><h3>Assignments</h3>'+(items.length?items.slice(-8).map(x=>'<div class="listItem"><span>'+esc(x.title)+'</span><span class="pill">'+fmt(x.date)+'</span></div>').join(''):'<div class="muted">No assignments yet.</div>')+'</div><div class="card"><h3>Saved Notes</h3>'+(notes.length?notes.map(n=>'<div class="listItem"><span>'+esc(n.text)+'</span></div>').join(''):'<div class="muted">No notes saved yet.</div>')+'</div><div class="card"><b>Coming next:</b> automatic study plans and practice questions built from this class\'s assignments and notes.</div>'}
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;let rec;
+if(SpeechRecognition){rec=new SpeechRecognition();rec.lang='en-US';rec.interimResults=false;rec.onstart=()=>{$('mic').classList.add('listening');$('micStatus').textContent='Listening…'};rec.onend=()=>{$('mic').classList.remove('listening');$('micStatus').textContent='Tap to speak'};rec.onresult=e=>voiceResult(e.results[0][0].transcript);$('mic').onclick=()=>rec.start()}else{$('mic').onclick=()=>alert('Voice recognition is not available in this browser. Try Chrome or use + Add.');$('micStatus').textContent='Voice recognition requires a supported browser.'}
+function voiceResult(t){$('heard').innerHTML='<p><b>I heard:</b> “'+esc(t)+'”</p><button class="btn primary" id="useVoice">Turn into assignment</button>';$('useVoice').onclick=()=>{openItem();$('itemTitle').value=t;let lower=t.toLowerCase();if(lower.includes('test'))$('itemType').value='Test';else if(lower.includes('quiz'))$('itemType').value='Quiz';else if(lower.includes('project'))$('itemType').value='Project';}}
+function renderAll(){refreshSelects();renderCalendar();renderClasses()}renderAll();
+</script></body></html>
