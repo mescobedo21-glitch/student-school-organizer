@@ -1,0 +1,11 @@
+{
+  "name":"Bradford Student Organizer",
+  "short_name":"Bradford",
+  "description":"A simple school organizer for Bradford Red Devils students.",
+  "start_url":"./",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#f7f7f7",
+  "theme_color":"#7F2729",
+  "icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
