@@ -35,32 +35,34 @@ function showScheduleText(text,u){
  const clean=x=>String(x||'').replace(/[|{}\[\]<>]/g,' ').replace(/\s+/g,' ').trim();
  let raw=text.replace(/\r/g,'').split(/\n+/).map(clean).filter(Boolean);
  let vals=[],used=new Set();
- // Bradford block rule: class line(s) come before teacher, room, then "Period #".
- // Work backward from each Period marker because OCR may wrap a long class name.
- raw.forEach((line,i)=>{
-   let pm=line.match(/\bPeriod\s*(\d{1,2})\b/i); if(!pm)return;
-   let period=pm[1], room='', teacher='', classParts=[];
-   let j=i-1;
-   // Room is immediately before Period. Accept plain room numbers or labels like "Thomas 229".
-   if(j>=0){room=raw[j];j--}
-   // Teacher is immediately before room.
-   if(j>=0){teacher=raw[j];j--}
-   // Class is the line before teacher, and may wrap onto one additional preceding line.
-   if(j>=0){classParts.unshift(raw[j]);j--}
-   if(j>=0){
-     let prev=raw[j];
-     let looksHeader=/^(mon|tue|wed|thu|fri|monday|tuesday|wednesday|thursday|friday|time|schedule|student|semester|term|period)$/i.test(prev);
-     let looksOtherPeriod=/\bPeriod\s*\d+/i.test(prev);
-     // Join a likely wrapped course line, but don't pull in calendar/header text.
-     if(!looksHeader&&!looksOtherPeriod&&prev.length>2&&prev.length<55)classParts.unshift(prev);
+ // OCR often flattens a schedule block into one line. Anchor on "Period #" and parse the text immediately before it.
+ let flat=raw.join('  '),matches=[...flat.matchAll(/\bPeriod\s*(\d{1,2})\b/ig)];
+ matches.forEach((pm,idx)=>{
+   let end=pm.index,start=idx?matches[idx-1].index+matches[idx-1][0].length:0;
+   let segment=clean(flat.slice(start,end));
+   // Remove common schedule/header debris.
+   segment=segment.replace(/\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Mon|Tue|Wed|Thu|Fri)\b/ig,' ').replace(/\s+/g,' ').trim();
+   if(!segment)return;
+   let toks=segment.split(' ');
+   // Room is normally the final token (145) or final two tokens (Thomas 229).
+   let room='',teacher='',name='';
+   let num=toks.length-1;
+   if(num>=0&&/^\d{2,4}[A-Za-z]?$/.test(toks[num])){
+     room=toks[num];toks.pop();
+     if(toks.length&&/^[A-Z][A-Za-z.'-]+$/.test(toks[toks.length-1])&&toks.length>3&&/^(Thomas|Room|Rm)$/i.test(toks[toks.length-1]))room=toks.pop()+' '+room;
    }
-   let name=clean(classParts.join(' '));
-   // Remove accidental leading time/day fragments that OCR sometimes captures.
-   name=name.replace(/^\d{1,2}:\d{2}\s*(AM|PM)?\s*/i,'').trim();
-   if(!name||name.length<2)return;
-   let key=period+'|'+name.toLowerCase().replace(/[^a-z0-9]/g,'');
-   if(!used.has(key)){used.add(key);vals.push({name,teacher:clean(teacher),room:clean(room),period})}
+   // Bradford teacher format is commonly Lastname, Firstname. Split there when OCR preserves the comma.
+   let remain=toks.join(' '),tm=remain.match(/^(.*?)([A-Z][A-Za-z'’-]+,\s*[A-Z][A-Za-z'’-]+)$/);
+   if(tm){name=clean(tm[1]);teacher=clean(tm[2])}
+   else{
+     // If comma was lost, keep the course readable rather than returning a blank row.
+     name=remain;
+   }
+   name=name.replace(/^.*?\b(?:AM|PM)\b\s*/i,'').trim();
+   if(name.length>1){let key=pm[1]+'|'+name.toLowerCase().replace(/[^a-z0-9]/g,'');if(!used.has(key)){used.add(key);vals.push({name,teacher,room,period:pm[1]})}}
  });
+ // Also try line-aware blocks; these can recover teacher/room when OCR preserved line breaks.
+ raw.forEach((line,i)=>{let pm=line.match(/\bPeriod\s*(\d{1,2})\b/i);if(!pm)return;let p=pm[1];if(vals.some(x=>x.period===p))return;let room=clean(raw[i-1]),teacher=clean(raw[i-2]),name=clean(raw[i-3]);if(name)vals.push({name,teacher,room,period:p})});
  // Merge repeated day-column copies by period. Prefer the cleanest/longest readable class name.
  let byPeriod=new Map();
  vals.forEach(x=>{let old=byPeriod.get(x.period);if(!old||scoreScheduleCandidate(x)>scoreScheduleCandidate(old))byPeriod.set(x.period,x)});
