@@ -23,7 +23,44 @@ function renderClasses(){$('classGrid').innerHTML=s.classes.filter(c=>!c.archive
 function saveListeningNotes(){let text=$('liveNotes').value.trim(),classId=$('listenClass').value;if(!text||!classId)return alert('Choose a class and record or type some notes.');s.notes.push({id:crypto.randomUUID(),classId,text,date:new Date().toISOString()});$('liveNotes').value='';persist();alert('Notes saved to the class folder.');renderStudy()}
 let scanCandidates=[];
 async function schedulePreview(e){let f=e.target.files[0];if(!f)return;let u=URL.createObjectURL(f);$('scanPreview').innerHTML='<div class="notice"><b>Reading your schedule…</b><div class="small muted">Keep this page open while the photo is processed on this device.</div><div class="progress"><div id="ocrBar"></div></div><div id="ocrStatus" class="small muted">Starting…</div><img src="'+u+'" alt="Schedule preview" style="max-width:100%;max-height:260px;border-radius:10px;margin-top:10px"></div>';try{let result=await Tesseract.recognize(f,'eng',{logger:m=>{if(m.progress!=null&&$('ocrBar'))$('ocrBar').style.width=Math.round(m.progress*100)+'%';if($('ocrStatus'))$('ocrStatus').textContent=(m.status||'Reading')+(m.progress!=null?' '+Math.round(m.progress*100)+'%':'')}});showScheduleText(result.data.text,u)}catch(err){$('scanPreview').innerHTML='<div class="notice"><b>Could not read this photo.</b><p class="small muted">Try a clearer, straight-on photo with good lighting, or add classes manually.</p></div>'}}
-function showScheduleText(text,u){let raw=text.replace(/\r/g,'').split(/\n+/).map(x=>x.replace(/[|{}\[\]<>]/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);let joined=raw.join(' \n '),blocks=[],periodRe=/Period\s*(\d{1,2})/ig,last=0,m;while((m=periodRe.exec(joined))){let chunk=joined.slice(last,m.index).trim();blocks.push({chunk,period:m[1]});last=periodRe.lastIndex}let parsed=[];for(let b of blocks){let parts=b.chunk.split(/\s+\n\s+/).map(x=>x.trim()).filter(Boolean);let tail=parts.slice(-4);let className='',teacher='',room='';if(tail.length){className=tail[0]||'';if(tail.length>=2){let detail=tail.slice(1).join(' ');let rm=detail.match(/\b(?:Room\s*)?([A-Za-z]*\s*\d{2,4})\s*$/i);if(rm){room=rm[1].trim();detail=detail.slice(0,rm.index).trim()}teacher=detail}}className=className.replace(/^(Leadership|Algebra|English|Biology|Chemistry|Physics|Geometry|History|Government|Economics|Spanish|French|German|Art|Music|Band|Choir|PE|Physical Education|Health|Business|Marketing|Accounting|Computer|Science|Math)/i,x=>x).trim();if(className.length<2)continue;parsed.push({name:className,teacher,room,period:b.period})}let byPeriod=new Map();parsed.forEach(x=>{let key=x.period+'|'+x.name.toLowerCase();if(!byPeriod.has(key)||((x.teacher+x.room).length>(byPeriod.get(key).teacher+byPeriod.get(key).room).length))byPeriod.set(key,x)});let vals=[...byPeriod.values()];if(!vals.length){let fallback=raw.filter(x=>/Period\s*\d+/i.test(x));vals=fallback.map(x=>{let pm=x.match(/Period\s*(\d+)/i);return{name:x.replace(/Period\s*\d+.*/i,'').trim()||'Class',teacher:'',room:'',period:pm?pm[1]:''}})}vals.sort((a,b)=>(+a.period||99)-(+b.period||99));scanCandidates=vals.slice(0,12).map(x=>({name:x.name,info:['Period '+x.period,x.teacher,x.room&&('Room '+x.room)].filter(Boolean).join(' • '),keep:true}));renderScanCandidates(u)}
+function showScheduleText(text,u){
+ let raw=text.replace(/\r/g,'').split(/\n+/).map(x=>x.replace(/[|{}\[\]<>]/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);
+ let joined=raw.join(' \n '),found=[],periodRe=/Period\s*(\d{1,2})/ig,m,last=0;
+ while((m=periodRe.exec(joined))){let before=joined.slice(last,m.index).trim();found.push({chunk:before,period:m[1]});last=periodRe.lastIndex}
+ let parsed=[];
+ found.forEach(b=>{
+   let parts=b.chunk.split(/\s+\n\s+/).map(x=>x.trim()).filter(Boolean).slice(-5);
+   if(!parts.length)return;
+   let className=parts[0],detail=parts.slice(1).join(' '),teacher='',room='';
+   let rm=detail.match(/\b(?:Room\s*)?([A-Za-z]*\s*\d{2,4})\s*$/i);
+   if(rm){room=rm[1].trim();detail=detail.slice(0,rm.index).trim()}
+   teacher=detail;
+   if(className&&className.length>1)parsed.push({name:className,teacher,room,period:b.period});
+ });
+ // Bradford schedules repeat the same course across day columns. Deduplicate by period + normalized course.
+ let seen=new Map();
+ parsed.forEach(x=>{let key=x.period+'|'+x.name.toLowerCase().replace(/[^a-z0-9]/g,'');if(!seen.has(key))seen.set(key,x)});
+ let vals=[...seen.values()];
+ // Safety fallback: NEVER leave the student without the old checkbox review screen.
+ if(!vals.length){
+   vals=raw.map(line=>{
+     let pm=line.match(/Period\s*(\d{1,2})/i);
+     if(!pm)return null;
+     return {name:line.replace(/Period\s*\d{1,2}.*/i,'').trim()||('Period '+pm[1]+' Class'),teacher:'',room:'',period:pm[1]};
+   }).filter(Boolean);
+ }
+ if(!vals.length){
+   // OCR may put Period on its own line; use nearby text as editable candidates.
+   raw.forEach((line,i)=>{let pm=line.match(/Period\s*(\d{1,2})/i);if(pm){let name=(raw[i-2]||raw[i-1]||'Class').trim();vals.push({name,teacher:raw[i-1]&&raw[i-1]!==name?raw[i-1]:'',room:'',period:pm[1]})}});
+ }
+ if(!vals.length){
+   // Last-resort editable OCR lines, matching the original behavior instead of showing nothing.
+   vals=[...new Set(raw.filter(x=>x.length>2&&x.length<80))].slice(0,12).map((name,i)=>({name,teacher:'',room:'',period:''}));
+ }
+ vals.sort((a,b)=>(+a.period||99)-(+b.period||99));
+ scanCandidates=vals.slice(0,14).map(x=>({name:x.name,info:[x.period&&('Period '+x.period),x.teacher,x.room&&('Room '+x.room)].filter(Boolean).join(' • '),keep:true}));
+ renderScanCandidates(u);
+}
 function renderScanCandidates(u){$('scanPreview').innerHTML='<div class="notice"><b>Does this schedule look right?</b><p class="small muted">Repeated day blocks were combined. Review the class name and details, uncheck anything that is not a class, and fix anything the scan misread.</p><img src="'+u+'" alt="Schedule preview" style="max-width:100%;max-height:180px;border-radius:10px;margin-bottom:10px"><div id="scanRows"></div><div class="row" style="margin-top:12px"><button class="btn primary" onclick="importScannedClasses()">Create Class Folders</button><button class="btn" onclick="$(\'scanPreview\').innerHTML=\'\'">Cancel</button></div></div>';let box=$('scanRows');box.innerHTML=scanCandidates.map((x,i)=>'<div class="scanRow"><input type="checkbox" '+(x.keep?'checked':'')+' id="scanKeep'+i+'"><input value="'+esc(x.name)+'" id="scanName'+i+'" aria-label="Class name"><input placeholder="Period • teacher • room" value="'+esc(x.info)+'" id="scanInfo'+i+'" aria-label="Class details"></div>').join('')}
 function importScannedClasses(){let added=0;scanCandidates.forEach((x,i)=>{if(!$('scanKeep'+i)?.checked)return;let name=$('scanName'+i).value.trim(),info=$('scanInfo'+i).value.trim();if(!name)return;if(!s.classes.some(c=>!c.archived&&c.name.toLowerCase()===name.toLowerCase())){s.classes.push({id:crypto.randomUUID(),name,info,archived:false});added++}});persist();$('scanPreview').innerHTML='<div class="notice"><b>'+added+' class folder'+(added===1?'':'s')+' created.</b><div class="small muted">Review them below. You can archive mistakes or add anything the scan missed.</div></div>';render()}
 function renderStudy(){selects();let id=$('studyClass').value;if(!id){$('studyContent').innerHTML='<div class="card empty">Add a class first.</div>';return}let items=s.items.filter(x=>x.classId===id).sort((a,b)=>a.date.localeCompare(b.date)),notes=s.notes.filter(n=>n.classId===id).slice(-5).reverse(),tests=items.filter(x=>['Test','Quiz'].includes(x.type)&&x.date>=iso(new Date()));$('studyContent').innerHTML='<div class="card"><h3>Next Test / Quiz</h3>'+(tests[0]?'<b>'+esc(tests[0].title)+'</b><div class="muted">'+pretty(tests[0].date)+'</div>':'<div class="muted">No upcoming test entered.</div>')+'</div><div class="card"><h3>Assignments</h3>'+(items.length?items.slice(-8).map(x=>'<div class="list"><span>'+esc(x.title)+'</span><span class="pill">'+pretty(x.date)+'</span></div>').join(''):'<div class="muted">No assignments yet.</div>')+'</div><div class="card"><h3>Saved Notes</h3>'+(notes.length?notes.map(n=>'<div class="list">'+esc(n.text)+'</div>').join(''):'<div class="muted">No notes saved yet.</div>')+'</div><div class="card"><b>Coming next:</b> automatic study plans and practice questions built from these assignments and notes.</div>'}
